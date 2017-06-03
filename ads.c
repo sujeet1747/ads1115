@@ -1,6 +1,8 @@
 /* 
 	ADS1115_sample.c - 12/9/2013. Written by David Purdie as part of the openlabtools initiative
 	Initiates and reads a single sample from the ADS1115 (without error handling)
+
+Sujeet Poudel
 */
 
 #include <stdio.h>
