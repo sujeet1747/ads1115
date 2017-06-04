@@ -1,60 +1,70 @@
-/* 
-	ADS1115_sample.c - 12/9/2013. Written by David Purdie as part of the openlabtools initiative
-	Initiates and reads a single sample from the ADS1115 (without error handling)
 
-Sujeet Poudel
-*/
 
+// Distributed with a free-will license.
+// Use it any way you want, profit or free, provided it fits in the licenses of its associated works.
+// ADS1115
+// This code is designed to work with the ADS1115_I2CADC I2C Mini Module available from ControlEverything.com.
+// https://www.controleverything.com/content/Analog-Digital-Converters?sku=ADS1115_I2CADC#tabs-0-product_tabset-2
 #include <stdio.h>
-#include <fcntl.h>// open
-#include <inttypes.h>// uint8_t, etc
-#include <linux/i2c-dev.h> // I2C bus definitions
+#include <stdlib.h>
+#include <linux/i2c-dev.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 
-int main() {
+int file;
 	
-  int ADS_address = 0x48;	// Address of our device on the I2C bus
-  int I2CFile;
-  
-  uint8_t writeBuf[3];		// Buffer to store the 3 bytes that we write to the I2C device
-  uint8_t readBuf[2];		// 2 byte buffer to store the data read from the I2C device
-  
-  int16_t val;				// Stores the 16 bit value of our ADC conversion
-  
-  I2CFile = open("/dev/i2c-1", O_RDWR);		// Open the I2C device
-  
-  ioctl(I2CFile, I2C_SLAVE, ADS_address);   // Specify the address of the I2C Slave to communicate with
-	  
-  // These three bytes are written to the ADS1115 to set the config register and start a conversion 
-  writeBuf[0] = 1;			// This sets the pointer register so that the following two bytes write to the config register
-  writeBuf[1] = 0xC3;   	// This sets the 8 MSBs of the config register (bits 15-8) to 11000011
-  writeBuf[2] = 0x03;  		// This sets the 8 LSBs of the config register (bits 7-0) to 00000011
-  
-  // Initialize the buffer used to read data from the ADS1115 to 0
-  readBuf[0]= 0;		
-  readBuf[1]= 0;
-	  
-  // Write writeBuf to the ADS1115, the 3 specifies the number of bytes we are writing,
-  // this begins a single conversion
-  write(I2CFile, writeBuf, 3);	
-
-  // Wait for the conversion to complete, this requires bit 15 to change from 0->1
-  while ((readBuf[0] & 0x80) == 0)	// readBuf[0] contains 8 MSBs of config register, AND with 10000000 to select bit 15
-  {
-	  read(I2CFile, readBuf, 2);	// Read the config register into readBuf
-  }
-
-  writeBuf[0] = 0;					// Set pointer register to 0 to read from the conversion register
-  write(I2CFile, writeBuf, 1);
-  
-  read(I2CFile, readBuf, 2);		// Read the contents of the conversion register into readBuf
-
-  val = readBuf[0] << 8 | readBuf[1];	// Combine the two bytes of readBuf into a single 16 bit result 
-  
-  printf("Voltage Reading %f (V) \n", (float)val*4.096/32767.0);	// Print the result to terminal, first convert from binary value to mV
+	
+	void main()
+	{
+	// Create I2C bus
+	
+	char *bus = "/dev/i2c-1";
+	if ((file = open(bus, O_RDWR)) < 0)
+	{
+	printf("Failed to open the bus. \n");
+	exit(1);
+	}
+	// Get I2C device, ADS1115 I2C address is 0x48(72)
+	ioctl(file, I2C_SLAVE, 0x48);
+	// Select configuration register(0x01)
+	// AINP = AIN0 and AINN = AIN1, +/- 2.048V
+	// Continuous conversion mode, 128 SPS(0x84, 0x83)
+	char config[3] = {0};
+	config[0] = 0x01;
+	config[1] = 0x84;
+	config[2] = 0x83;
+	write(file, config, 3);
+	sleep(1);
+	// Read 2 bytes of data from register(0x00)
+	// raw_adc msb, raw_adc lsb
+	
+	// Output data to screen
+	while(1) {
 		
-  close(I2CFile);
-  
-  return 0;
-
+	printf("Digital Value of Analog Input: %d \n", read_adc());
 }
+	
+	}
+	
+	
 
+int read_adc() {
+	
+	char reg[1] = {0x00};
+	write(file, reg, 1);
+	char data[2]={0};
+	if(read(file, data, 2) != 2)
+	{
+	printf("Error : Input/Output Error \n");
+	}
+	else
+	{
+	// Convert the data
+	int raw_adc = (data[0] * 256 + data[1]);
+	if (raw_adc > 32767)
+	{
+	raw_adc -= 65535;
+	}
+	return raw_adc;
+	}
+}
